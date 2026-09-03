@@ -1,0 +1,9 @@
+# Política de Privacidad de Videocomprime
+
+Tu privacidad es una prioridad fundamental para nosotros. Esta política explica de manera clara cómo tratamos tu información cuando utilizas la aplicación Videocomprime. Al descargar y utilizar nuestra herramienta, aceptas las prácticas descritas en este documento. 
+
+El funcionamiento principal de Videocomprime se basa en el procesamiento local. Esto significa que todos los procesos de reducción de tamaño y compresión de tus videos se realizan directamente en el procesador de tu dispositivo móvil. Nosotros no subimos, copiamos, visualizamos ni almacenamos tus videos en ningún servidor externo. Tus archivos personales nunca abandonan tu teléfono, garantizando así la confidencialidad absoluta de tu contenido audiovisual.
+
+Para poder ofrecer y mantener esta aplicación, integramos servicios de terceros que manejan información técnica y comercial de forma segura. Utilizamos RevenueCat para gestionar la validación de las compras dentro de la aplicación y el estado de tu membresía Pro. Asimismo, para los usuarios de la versión gratuita, utilizamos Google AdMob para mostrar anuncios publicitarios. Estos proveedores pueden recopilar identificadores anónimos de tu dispositivo o datos de uso generales para entregar anuncios relevantes o verificar transacciones, operando siempre bajo sus propias políticas de privacidad y los estrictos estándares de seguridad de Apple.
+
+Nos reservamos el derecho de actualizar esta Política de Privacidad en el futuro para reflejar posibles cambios en la aplicación o requerimientos legales. Cualquier modificación entrará en vigor en el momento de su publicación en este mismo medio. Si tienes alguna duda sobre el manejo de tus datos o el funcionamiento de la aplicación, puedes ponerte en contacto con nosotros a través de los canales de soporte de la tienda de aplicaciones.
