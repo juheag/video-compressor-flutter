@@ -7,8 +7,13 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:video_player/video_player.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'paywall_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await MobileAds.instance.initialize();
+
   runApp(const MaterialApp(
     home: VideoCompressorScreen(),
     debugShowCheckedModeBanner: false,
@@ -27,6 +32,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   String? _outputPath;
   bool _isCompressing = false;
   String _selectedQuality = 'Equilibrada';
+  bool _isPro = false;
 
   double? _originalSizeMb;
   double? _compressedSizeMb;
@@ -34,10 +40,102 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
 
   VideoPlayerController? _videoController;
 
+  BannerAd? _bannerAd;
+  bool _isBannerLoaded = false;
+  InterstitialAd? _interstitialAd;
+
+  // IDs oficiales de prueba de Google para iOS
+  final String _bannerTestId = 'ca-app-pub-3940256099942544/2934735716';
+  final String _interstitialTestId = 'ca-app-pub-3940256099942544/4411468910';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBanner();
+    _loadInterstitial();
+  }
+
   @override
   void dispose() {
     _videoController?.dispose();
+    _bannerAd?.dispose();
+    _interstitialAd?.dispose();
     super.dispose();
+  }
+
+  void _loadBanner() {
+    if (_isPro) return;
+
+    _bannerAd = BannerAd(
+      adUnitId: _bannerTestId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          setState(() {
+            _isBannerLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  void _loadInterstitial() {
+    if (_isPro) return;
+
+    InterstitialAd.load(
+      adUnitId: _interstitialTestId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _interstitialAd = null;
+        },
+      ),
+    );
+  }
+
+  void _showInterstitialIfAvailable() {
+    if (_isPro) return;
+
+    if (_interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          _loadInterstitial(); // Precargar el siguiente
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _loadInterstitial();
+        },
+      );
+      _interstitialAd!.show();
+      _interstitialAd = null;
+    }
+  }
+
+  void _openPaywall() async {
+    final purchased = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => const PaywallScreen(),
+      ),
+    );
+
+    if (purchased == true) {
+      setState(() {
+        _isPro = true;
+        _selectedQuality = 'Alta Calidad';
+        _bannerAd?.dispose();
+        _bannerAd = null;
+        _isBannerLoaded = false;
+      });
+    }
   }
 
   Future<void> _pickVideo() async {
@@ -141,6 +239,9 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
               _progress = 1.0;
               _videoController = controller;
             });
+
+            // Muestra anuncio intersticial al terminar con éxito
+            _showInterstitialIfAvailable();
           }
         } else if (ReturnCode.isCancel(returnCode)) {
           final partialFile = File(outPath);
@@ -200,7 +301,24 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isPro ? Icons.verified : Icons.workspace_premium,
+              color: _isPro ? Colors.lightGreenAccent : Colors.amber,
+            ),
+            tooltip: _isPro ? 'Pro Activo' : 'Hazte Pro',
+            onPressed: _openPaywall,
+          ),
+        ],
       ),
+      bottomNavigationBar: (!_isPro && _isBannerLoaded && _bannerAd != null)
+          ? SizedBox(
+              height: _bannerAd!.size.height.toDouble(),
+              width: _bannerAd!.size.width.toDouble(),
+              child: AdWidget(ad: _bannerAd!),
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -221,25 +339,54 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
             ),
             const SizedBox(height: 24),
 
-            const Text(
-              'Nivel de compresión deseado:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Nivel de compresión deseado:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                if (_isPro)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'PRO',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.brown,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
 
             SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'Alta Calidad', label: Text('Alta (1080p)')),
-                ButtonSegment(value: 'Equilibrada', label: Text('Media (720p)')),
-                ButtonSegment(value: 'Máximo Ahorro', label: Text('Ahorro (480p)')),
+              segments: [
+                ButtonSegment(
+                  value: 'Alta Calidad',
+                  label: Text(_isPro ? 'Alta (1080p)' : 'Alta (1080p) 👑'),
+                ),
+                const ButtonSegment(value: 'Equilibrada', label: Text('Media (720p)')),
+                const ButtonSegment(value: 'Máximo Ahorro', label: Text('Ahorro (480p)')),
               ],
               selected: {_selectedQuality},
               onSelectionChanged: _isCompressing
                   ? null
                   : (newSelection) {
-                      setState(() {
-                        _selectedQuality = newSelection.first;
-                      });
+                      final selected = newSelection.first;
+                      if (selected == 'Alta Calidad' && !_isPro) {
+                        _openPaywall();
+                      } else {
+                        setState(() {
+                          _selectedQuality = selected;
+                        });
+                      }
                     },
             ),
             const SizedBox(height: 24),
