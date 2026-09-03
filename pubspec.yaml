@@ -40,6 +40,7 @@ dependencies:
   ffmpeg_kit_flutter_new: ^4.6.2
   video_player: ^2.14.0
   google_mobile_ads: ^9.1.0
+  purchases_flutter: ^10.11.0
 
 dev_dependencies:
   flutter_test:

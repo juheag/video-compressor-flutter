@@ -8,11 +8,17 @@ import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import 'paywall_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   await MobileAds.instance.initialize();
+
+  if (Platform.isIOS) {
+    await Purchases.configure(PurchasesConfiguration('appl_placeholder_api_key'));
+  }
 
   runApp(const MaterialApp(
     home: VideoCompressorScreen(),
@@ -31,6 +37,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   File? _selectedFile;
   String? _outputPath;
   bool _isCompressing = false;
+  bool _isLoadingFile = false;
   String _selectedQuality = 'Equilibrada';
   bool _isPro = false;
 
@@ -44,13 +51,13 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   bool _isBannerLoaded = false;
   InterstitialAd? _interstitialAd;
 
-  // IDs oficiales de prueba de Google para iOS
   final String _bannerTestId = 'ca-app-pub-3940256099942544/2934735716';
   final String _interstitialTestId = 'ca-app-pub-3940256099942544/4411468910';
 
   @override
   void initState() {
     super.initState();
+    _checkInitialProStatus();
     _loadBanner();
     _loadInterstitial();
   }
@@ -61,6 +68,21 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
     _bannerAd?.dispose();
     _interstitialAd?.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkInitialProStatus() async {
+    try {
+      final customerInfo = await Purchases.getCustomerInfo();
+      if (customerInfo.entitlements.all['pro']?.isActive ?? false) {
+        setState(() {
+          _isPro = true;
+          _selectedQuality = 'Alta Calidad';
+          _bannerAd?.dispose();
+          _bannerAd = null;
+          _isBannerLoaded = false;
+        });
+      }
+    } catch (_) {}
   }
 
   void _loadBanner() {
@@ -107,7 +129,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
-          _loadInterstitial(); // Precargar el siguiente
+          _loadInterstitial();
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
           ad.dispose();
@@ -139,24 +161,42 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   }
 
   Future<void> _pickVideo() async {
-    final result = await FilePickerPlatform.instance.pickFiles(
-      type: FileType.video,
-    );
+    setState(() {
+      _isLoadingFile = true;
+    });
 
-    if (result.isNotEmpty && result.first.path != null) {
-      final file = File(result.first.path!);
-      final bytes = await file.length();
+    try {
+      final result = await FilePickerPlatform.instance.pickFiles(
+        type: FileType.video,
+      );
 
-      await _videoController?.dispose();
+      if (result.isNotEmpty && result.first.path != null) {
+        final file = File(result.first.path!);
+        final bytes = await file.length();
 
-      setState(() {
-        _selectedFile = file;
-        _outputPath = null;
-        _compressedSizeMb = null;
-        _progress = 0.0;
-        _videoController = null;
-        _originalSizeMb = bytes / (1024 * 1024);
-      });
+        await _videoController?.dispose();
+
+        setState(() {
+          _selectedFile = file;
+          _outputPath = null;
+          _compressedSizeMb = null;
+          _progress = 0.0;
+          _videoController = null;
+          _originalSizeMb = bytes / (1024 * 1024);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al acceder al archivo.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingFile = false;
+        });
+      }
     }
   }
 
@@ -240,7 +280,6 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
               _videoController = controller;
             });
 
-            // Muestra anuncio intersticial al terminar con éxito
             _showInterstitialIfAvailable();
           }
         } else if (ReturnCode.isCancel(returnCode)) {
@@ -325,9 +364,18 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ElevatedButton.icon(
-              onPressed: _isCompressing ? null : _pickVideo,
-              icon: const Icon(Icons.video_library),
-              label: const Text('Seleccionar Video'),
+              onPressed: (_isCompressing || _isLoadingFile) ? null : _pickVideo,
+              icon: _isLoadingFile
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
+                      ),
+                    )
+                  : const Icon(Icons.video_library),
+              label: Text(_isLoadingFile ? 'Cargando archivo...' : 'Seleccionar Video'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.indigo.shade50,

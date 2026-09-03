@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 
 class PaywallScreen extends StatefulWidget {
   const PaywallScreen({super.key});
@@ -8,11 +10,149 @@ class PaywallScreen extends StatefulWidget {
 }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  // 0: Plan Anual (Recomendado), 1: Pago Vitalicio
-  int _selectedPlan = 0;
+  int _selectedPlan = 0; // 0: Anual, 1: Vitalicio
+  bool _isLoadingOfferings = true;
+  bool _isProcessingPurchase = false;
+
+  Package? _annualPackage;
+  Package? _lifetimePackage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOfferings();
+  }
+
+  Future<void> _fetchOfferings() async {
+    try {
+      final offerings = await Purchases.getOfferings();
+      if (offerings.current != null) {
+        final available = offerings.current!.availablePackages;
+
+        for (var package in available) {
+          if (package.packageType == PackageType.annual) {
+            _annualPackage = package;
+          } else if (package.packageType == PackageType.lifetime) {
+            _lifetimePackage = package;
+          }
+        }
+      }
+    } catch (_) {
+      // Si aún no hay conexión con RevenueCat, se mantienen los valores locales por defecto
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingOfferings = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _makePurchase() async {
+    final packageToBuy = _selectedPlan == 0 ? _annualPackage : _lifetimePackage;
+
+    setState(() {
+      _isProcessingPurchase = true;
+    });
+
+    try {
+      if (packageToBuy != null) {
+        final purchaseResult = await Purchases.purchase(
+          PurchaseParams.package(packageToBuy),
+        );
+        final isProActive = purchaseResult.customerInfo.entitlements.all['pro']?.isActive ?? false;
+
+        if (isProActive && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text('¡Bienvenido a Videocomprime Pro!'),
+            ),
+          );
+          Navigator.of(context).pop(true);
+          return;
+        }
+      } else {
+        // Modo simulado para pruebas locales antes de conectar la tienda
+        await Future.delayed(const Duration(milliseconds: 900));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text('Compra simulada con éxito (Modo local)'),
+            ),
+          );
+          Navigator.of(context).pop(true);
+          return;
+        }
+      }
+    } on PlatformException catch (e) {
+      final errorCode = PurchasesErrorHelper.getErrorCode(e);
+      if (errorCode != PurchasesErrorCode.purchaseCancelledError && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Error en la transacción: ${e.message}'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingPurchase = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    setState(() {
+      _isProcessingPurchase = true;
+    });
+
+    try {
+      final customerInfo = await Purchases.restorePurchases();
+      final isProActive = customerInfo.entitlements.all['pro']?.isActive ?? false;
+
+      if (mounted) {
+        if (isProActive) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text('Tus compras anteriores fueron restauradas con éxito.'),
+            ),
+          );
+          Navigator.of(context).pop(true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se encontraron suscripciones activas asociadas a tu cuenta.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No fue posible conectar con la tienda para restaurar.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingPurchase = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final annualPriceString = _annualPackage?.storeProduct.priceString ?? '\$9.99 USD / año';
+    final lifetimePriceString = _lifetimePackage?.storeProduct.priceString ?? '\$19.99 USD';
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -20,7 +160,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.black54, size: 28),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _isProcessingPurchase ? null : () => Navigator.of(context).pop(),
         ),
       ),
       body: SafeArea(
@@ -29,7 +169,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Encabezado visual
               Center(
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -67,7 +206,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 28),
 
-              // Lista de beneficios
               _buildBenefitRow(
                 icon: Icons.high_quality_rounded,
                 title: 'Exportación Full HD (1080p)',
@@ -87,40 +225,25 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 28),
 
-              // Opciones de compra
               _buildPlanCard(
                 index: 0,
                 title: 'Plan Anual',
-                price: '\$9.99 USD / año',
-                detail: '\$0.83 USD al mes',
+                price: annualPriceString,
+                detail: 'Facturación anual renovable automáticamente',
                 badgeText: 'MÁS POPULAR',
               ),
               const SizedBox(height: 12),
               _buildPlanCard(
                 index: 1,
                 title: 'Acceso de por Vida',
-                price: '\$19.99 USD',
+                price: lifetimePriceString,
                 detail: 'Un solo pago para siempre',
                 badgeText: null,
               ),
               const SizedBox(height: 24),
 
-              // Botón de acción principal
               ElevatedButton(
-                onPressed: () {
-                  // Simulación de compra exitosa
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: Colors.green.shade700,
-                      content: Text(
-                        _selectedPlan == 0
-                            ? 'Plan Anual seleccionado (Modo demostración)'
-                            : 'Pago Vitalicio seleccionado (Modo demostración)',
-                      ),
-                    ),
-                  );
-                  Navigator.of(context).pop(true);
-                },
+                onPressed: (_isProcessingPurchase || _isLoadingOfferings) ? null : _makePurchase,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white,
@@ -130,23 +253,27 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   ),
                   elevation: 2,
                 ),
-                child: const Text(
-                  'Continuar',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                ),
+                child: _isProcessingPurchase
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Continuar',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
               ),
               const SizedBox(height: 16),
 
-              // Enlaces obligatorios de Apple
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Buscando compras anteriores...')),
-                      );
-                    },
+                    onPressed: _isProcessingPurchase ? null : _restorePurchases,
                     child: const Text(
                       'Restaurar compras',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
@@ -229,7 +356,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.indigo.shade50.withOpacity(0.5) : Colors.grey.shade50,
+              color: isSelected ? Colors.indigo.shade50.withValues(alpha: 0.5) : Colors.grey.shade50,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isSelected ? Colors.indigo : Colors.grey.shade300,
