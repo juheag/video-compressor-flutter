@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'translations.dart';
 
 class PaywallScreen extends StatefulWidget {
   const PaywallScreen({super.key});
@@ -10,12 +11,9 @@ class PaywallScreen extends StatefulWidget {
 }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  int _selectedPlan = 0; // 0: Anual, 1: Vitalicio
-  bool _isLoadingOfferings = true;
-  bool _isProcessingPurchase = false;
-
-  Package? _annualPackage;
-  Package? _lifetimePackage;
+  Offerings? _offerings;
+  Package? _selectedPackage;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -26,395 +24,221 @@ class _PaywallScreenState extends State<PaywallScreen> {
   Future<void> _fetchOfferings() async {
     try {
       final offerings = await Purchases.getOfferings();
-      if (offerings.current != null) {
-        final available = offerings.current!.availablePackages;
-
-        for (var package in available) {
-          if (package.packageType == PackageType.annual) {
-            _annualPackage = package;
-          } else if (package.packageType == PackageType.lifetime) {
-            _lifetimePackage = package;
-          }
-        }
-      }
-    } catch (_) {
-      // Si aún no hay conexión con RevenueCat, se mantienen los valores locales por defecto
-    } finally {
       if (mounted) {
         setState(() {
-          _isLoadingOfferings = false;
+          _offerings = offerings;
+          if (offerings.current != null && offerings.current!.availablePackages.isNotEmpty) {
+            _selectedPackage = offerings.current!.availablePackages.first;
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     }
   }
 
   Future<void> _makePurchase() async {
-    final packageToBuy = _selectedPlan == 0 ? _annualPackage : _lifetimePackage;
-
-    setState(() {
-      _isProcessingPurchase = true;
-    });
-
+    if (_selectedPackage == null) return;
+    setState(() => _isLoading = true);
+    
     try {
-      if (packageToBuy != null) {
-        final purchaseResult = await Purchases.purchase(
-          PurchaseParams.package(packageToBuy),
-        );
-        final isProActive = purchaseResult.customerInfo.entitlements.all['pro']?.isActive ?? false;
-
-        if (isProActive && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.green,
-              content: Text('¡Bienvenido a Videocomprime Pro!'),
-            ),
-          );
-          Navigator.of(context).pop(true);
-          return;
-        }
-      } else {
-        // Modo simulado para pruebas locales antes de conectar la tienda
-        await Future.delayed(const Duration(milliseconds: 900));
+      final customerInfo = await Purchases.purchasePackage(_selectedPackage!);
+      if (customerInfo.entitlements.all['pro']?.isActive ?? false) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.green,
-              content: Text('Compra simulada con éxito (Modo local)'),
-            ),
+            SnackBar(content: Text(AppText.get('success_purchase')), backgroundColor: Colors.green),
           );
-          Navigator.of(context).pop(true);
-          return;
+          Navigator.pop(context, true);
         }
       }
-    } on PlatformException catch (e) {
-      final errorCode = PurchasesErrorHelper.getErrorCode(e);
-      if (errorCode != PurchasesErrorCode.purchaseCancelledError && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Error en la transacción: ${e.message}'),
-          ),
-        );
-      }
+    } catch (e) {
+      // El usuario canceló el pago o hubo un error
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessingPurchase = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _restorePurchases() async {
-    setState(() {
-      _isProcessingPurchase = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
       final customerInfo = await Purchases.restorePurchases();
-      final isProActive = customerInfo.entitlements.all['pro']?.isActive ?? false;
-
-      if (mounted) {
-        if (isProActive) {
+      if (customerInfo.entitlements.all['pro']?.isActive ?? false) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.green,
-              content: Text('Tus compras anteriores fueron restauradas con éxito.'),
-            ),
+            SnackBar(content: Text(AppText.get('success_restore')), backgroundColor: Colors.green),
           );
-          Navigator.of(context).pop(true);
-        } else {
+          Navigator.pop(context, true);
+        }
+      } else {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No se encontraron suscripciones activas asociadas a tu cuenta.'),
-            ),
+            SnackBar(content: Text(AppText.get('no_restore'))),
           );
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No fue posible conectar con la tienda para restaurar.'),
-          ),
-        );
-      }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessingPurchase = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _launchURL() async {
+    final url = Uri.parse('https://juheag.github.io/video-compressor-flutter/privacidad.html');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
+  Widget _buildFeatureRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.amber, size: 28),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 16, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final annualPriceString = _annualPackage?.storeProduct.priceString ?? '\$9.99 USD / año';
-    final lifetimePriceString = _lifetimePackage?.storeProduct.priceString ?? '\$19.99 USD';
-
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.indigo.shade900,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black54, size: 28),
-          onPressed: _isProcessingPurchase ? null : () => Navigator.of(context).pop(),
-        ),
+        foregroundColor: Colors.white,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.workspace_premium_rounded,
-                    size: 56,
-                    color: Colors.amber,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(Icons.workspace_premium, size: 80, color: Colors.amber),
+                    const SizedBox(height: 16),
+                    Text(
+                      AppText.get('paywall_title'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppText.get('paywall_subtitle'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.indigo.shade200),
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    _buildFeatureRow(Icons.block, AppText.get('feature_ads')),
+                    _buildFeatureRow(Icons.high_quality, AppText.get('feature_1080p')),
+                    _buildFeatureRow(Icons.speed, AppText.get('feature_support')),
+                    
+                    const Spacer(),
 
-              const Text(
-                'Desbloquea Videocomprime Pro',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Obtén la máxima calidad de exportación y procesa videos sin límites ni publicidad.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey.shade600,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 28),
+                    if (_offerings?.current != null && _offerings!.current!.availablePackages.isNotEmpty)
+                      ..._offerings!.current!.availablePackages.map((package) {
+                        final isSelected = _selectedPackage?.identifier == package.identifier;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedPackage = package;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.indigo.shade600 : Colors.indigo.shade800,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? Colors.amber : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      package.storeProduct.title,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      package.storeProduct.priceString,
+                                      style: TextStyle(color: Colors.amber.shade200, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle, color: Colors.amber),
+                              ],
+                            ),
+                          ),
+                        );
+                      })
+                    else
+                      Text(
+                        AppText.get('no_plans'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
+                      ),
 
-              _buildBenefitRow(
-                icon: Icons.high_quality_rounded,
-                title: 'Exportación Full HD (1080p)',
-                subtitle: 'Conserva el máximo detalle en tus tomas.',
-              ),
-              const SizedBox(height: 14),
-              _buildBenefitRow(
-                icon: Icons.block_rounded,
-                title: 'Cero Publicidad',
-                subtitle: 'Disfruta de una interfaz limpia y sin interrupciones.',
-              ),
-              const SizedBox(height: 14),
-              _buildBenefitRow(
-                icon: Icons.all_inclusive_rounded,
-                title: 'Duración Ilimitada',
-                subtitle: 'Comprime videos largos de cualquier peso.',
-              ),
-              const SizedBox(height: 28),
-
-              _buildPlanCard(
-                index: 0,
-                title: 'Plan Anual',
-                price: annualPriceString,
-                detail: 'Facturación anual renovable automáticamente',
-                badgeText: 'MÁS POPULAR',
-              ),
-              const SizedBox(height: 12),
-              _buildPlanCard(
-                index: 1,
-                title: 'Acceso de por Vida',
-                price: lifetimePriceString,
-                detail: 'Un solo pago para siempre',
-                badgeText: null,
-              ),
-              const SizedBox(height: 24),
-
-              ElevatedButton(
-                onPressed: (_isProcessingPurchase || _isLoadingOfferings) ? null : _makePurchase,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 2,
-                ),
-                child: _isProcessingPurchase
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    const SizedBox(height: 16),
+                    
+                    ElevatedButton(
+                      onPressed: _selectedPackage == null ? null : _makePurchase,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.amber,
+                        foregroundColor: Colors.indigo.shade900,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      )
-                    : const Text(
-                        'Continuar',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                       ),
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextButton(
-                    onPressed: _isProcessingPurchase ? null : _restorePurchases,
-                    child: const Text(
-                      'Restaurar compras',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-                  const Text('•', style: TextStyle(color: Colors.grey)),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text(
-                      'Términos',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-                  const Text('•', style: TextStyle(color: Colors.grey)),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text(
-                      'Privacidad',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBenefitRow({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.indigo.shade50,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: Colors.indigo, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              Text(
-                subtitle,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlanCard({
-    required int index,
-    required String title,
-    required String price,
-    required String detail,
-    required String? badgeText,
-  }) {
-    final isSelected = _selectedPlan == index;
-
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPlan = index),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.indigo.shade50.withValues(alpha: 0.5) : Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? Colors.indigo : Colors.grey.shade300,
-                width: isSelected ? 2 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                  color: isSelected ? Colors.indigo : Colors.grey.shade400,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      child: Text(
+                        AppText.get('continue_btn'),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      Text(
-                        detail,
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  price,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ],
-            ),
-          ),
-          if (badgeText != null)
-            Positioned(
-              top: -10,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade700,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  badgeText,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton(
+                          onPressed: _restorePurchases,
+                          child: Text(AppText.get('restore'), style: const TextStyle(color: Colors.white70)),
+                        ),
+                        TextButton(
+                          onPressed: _launchURL,
+                          child: Text(AppText.get('terms_privacy'), style: const TextStyle(color: Colors.white70)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ),
               ),
             ),
-        ],
-      ),
     );
   }
 }

@@ -10,13 +10,13 @@ import 'package:video_player/video_player.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'paywall_screen.dart';
+import 'translations.dart'; // Importamos el diccionario
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   await MobileAds.instance.initialize();
 
-  // Inicialización de RevenueCat con tu API Key real de pruebas
   if (Platform.isIOS) {
     await Purchases.configure(PurchasesConfiguration('test_asFwtRNkcwktZBtwUuzubLhArSk'));
   }
@@ -52,7 +52,6 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   bool _isBannerLoaded = false;
   InterstitialAd? _interstitialAd;
 
-  // Seguimos usando los IDs de prueba de AdMob por seguridad
   final String _bannerTestId = 'ca-app-pub-3940256099942544/2934735716';
   final String _interstitialTestId = 'ca-app-pub-3940256099942544/4411468910';
 
@@ -190,7 +189,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al acceder al archivo.')),
+          SnackBar(content: Text(AppText.get('error_file'))),
         );
       }
     } finally {
@@ -224,7 +223,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Compresión cancelada')),
+        SnackBar(content: Text(AppText.get('compression_cancelled'))),
       );
     }
   }
@@ -304,7 +303,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Error al procesar el video')),
+              SnackBar(content: Text(AppText.get('error_process'))),
             );
           }
         }
@@ -328,7 +327,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(_outputPath!)],
-          text: 'Video comprimido con Videocomprime',
+          text: AppText.get('share_text'),
         ),
       );
     }
@@ -338,7 +337,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Videocomprime'),
+        title: Text(AppText.get('app_title')),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         centerTitle: true,
@@ -348,7 +347,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
               _isPro ? Icons.verified : Icons.workspace_premium,
               color: _isPro ? Colors.lightGreenAccent : Colors.amber,
             ),
-            tooltip: _isPro ? 'Pro Activo' : 'Hazte Pro',
+            tooltip: _isPro ? AppText.get('pro_active') : AppText.get('go_pro'),
             onPressed: _openPaywall,
           ),
         ],
@@ -377,7 +376,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                       ),
                     )
                   : const Icon(Icons.video_library),
-              label: Text(_isLoadingFile ? 'Cargando archivo...' : 'Seleccionar Video'),
+              label: Text(_isLoadingFile ? AppText.get('loading_file') : AppText.get('select_video')),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.indigo.shade50,
@@ -392,9 +391,9 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Nivel de compresión deseado:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Text(
+                  AppText.get('compression_level'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 if (_isPro)
                   Container(
@@ -420,10 +419,10 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
               segments: [
                 ButtonSegment(
                   value: 'Alta Calidad',
-                  label: Text(_isPro ? 'Alta (1080p)' : 'Alta (1080p) 👑'),
+                  label: Text(_isPro ? AppText.get('high_quality') : '${AppText.get('high_quality')} 👑'),
                 ),
-                const ButtonSegment(value: 'Equilibrada', label: Text('Media (720p)')),
-                const ButtonSegment(value: 'Máximo Ahorro', label: Text('Ahorro (480p)')),
+                ButtonSegment(value: 'Equilibrada', label: Text(AppText.get('medium_quality'))),
+                ButtonSegment(value: 'Máximo Ahorro', label: Text(AppText.get('low_quality'))),
               ],
               selected: {_selectedQuality},
               onSelectionChanged: _isCompressing
@@ -452,14 +451,14 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Archivo: ${_selectedFile!.path.split('/').last}',
+                        '${AppText.get('file')} ${_selectedFile!.path.split('/').last}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Tamaño original: ${_originalSizeMb?.toStringAsFixed(2)} MB',
+                        '${AppText.get('original_size')} ${_originalSizeMb?.toStringAsFixed(2)} MB',
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
                     ],
@@ -481,8 +480,8 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                 const SizedBox(height: 10),
                 Text(
                   _progress > 0
-                      ? 'Procesando: ${(_progress * 100).toInt()}%'
-                      : 'Iniciando compresión...',
+                      ? '${AppText.get('processing')} ${(_progress * 100).toInt()}%'
+                      : AppText.get('starting_compression'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
                 ),
@@ -491,9 +490,9 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                 OutlinedButton.icon(
                   onPressed: _cancelCompression,
                   icon: const Icon(Icons.close, color: Colors.red),
-                  label: const Text(
-                    'Cancelar compresión',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  label: Text(
+                    AppText.get('cancel_compression'),
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                   ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -514,19 +513,19 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Comprimir Ahora',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    AppText.get('compress_now'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
             ] else ...[
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.only(top: 10.0),
+                  padding: const EdgeInsets.only(top: 10.0),
                   child: Text(
-                    'Selecciona un video arriba para habilitar el procesamiento',
-                    style: TextStyle(color: Colors.grey),
+                    AppText.get('select_video_hint'),
+                    style: const TextStyle(color: Colors.grey),
                   ),
                 ),
               ),
@@ -545,19 +544,19 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                   children: [
                     const Icon(Icons.check_circle, color: Colors.green, size: 36),
                     const SizedBox(height: 8),
-                    const Text(
-                      '¡Video Comprimido con Éxito!',
-                      style: TextStyle(
+                    Text(
+                      AppText.get('success_title'),
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         color: Colors.green,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text('Tamaño final: ${_compressedSizeMb?.toStringAsFixed(2)} MB'),
+                    Text('${AppText.get('final_size')} ${_compressedSizeMb?.toStringAsFixed(2)} MB'),
                     if (_originalSizeMb != null && _compressedSizeMb != null)
                       Text(
-                        'Ahorro: ${((1 - (_compressedSizeMb! / _originalSizeMb!)) * 100).toStringAsFixed(1)}%',
+                        '${AppText.get('savings')} ${((1 - (_compressedSizeMb! / _originalSizeMb!)) * 100).toStringAsFixed(1)}%',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     const SizedBox(height: 16),
@@ -611,7 +610,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                     ElevatedButton.icon(
                       onPressed: _shareVideo,
                       icon: const Icon(Icons.share),
-                      label: const Text('Guardar o Compartir'),
+                      label: Text(AppText.get('save_share')),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
