@@ -16,8 +16,9 @@ void main() async {
   
   await MobileAds.instance.initialize();
 
+  // Inicialización de RevenueCat con tu API Key real de pruebas
   if (Platform.isIOS) {
-    await Purchases.configure(PurchasesConfiguration('appl_placeholder_api_key'));
+    await Purchases.configure(PurchasesConfiguration('test_asFwtRNkcwktZBtwUuzubLhArSk'));
   }
 
   runApp(const MaterialApp(
@@ -51,6 +52,7 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
   bool _isBannerLoaded = false;
   InterstitialAd? _interstitialAd;
 
+  // Seguimos usando los IDs de prueba de AdMob por seguridad
   final String _bannerTestId = 'ca-app-pub-3940256099942544/2934735716';
   final String _interstitialTestId = 'ca-app-pub-3940256099942544/4411468910';
 
@@ -170,8 +172,8 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
         type: FileType.video,
       );
 
-      if (result.isNotEmpty && result.first.path != null) {
-        final file = File(result.first.path!);
+      if (result != null && result.paths.isNotEmpty && result.paths.first != null) {
+        final file = File(result.paths.first!);
         final bytes = await file.length();
 
         await _videoController?.dispose();
