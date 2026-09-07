@@ -47,8 +47,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
     setState(() => _isLoading = true);
     
     try {
-      final customerInfo = await Purchases.purchasePackage(_selectedPackage!);
-      if (customerInfo.entitlements.all['pro']?.isActive ?? false) {
+      final purchaseResult = await Purchases.purchasePackage(_selectedPackage!);
+      if (purchaseResult.customerInfo.entitlements.all['pro']?.isActive ?? false) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(AppText.get('success_purchase')), backgroundColor: Colors.green),
@@ -57,7 +57,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
         }
       }
     } catch (e) {
-      // El usuario canceló el pago o hubo un error
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -124,31 +123,33 @@ class _PaywallScreenState extends State<PaywallScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.white))
           : SafeArea(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.workspace_premium, size: 80, color: Colors.amber),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    const Icon(Icons.workspace_premium, size: 68, color: Colors.amber),
+                    const SizedBox(height: 12),
                     Text(
                       AppText.get('paywall_title'),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       AppText.get('paywall_subtitle'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.indigo.shade200),
+                      style: TextStyle(fontSize: 15, color: Colors.indigo.shade200),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
                     
                     _buildFeatureRow(Icons.block, AppText.get('feature_ads')),
                     _buildFeatureRow(Icons.high_quality, AppText.get('feature_1080p')),
+                    _buildFeatureRow(Icons.transform, AppText.get('feature_converter')),
                     _buildFeatureRow(Icons.speed, AppText.get('feature_support')),
                     
-                    const Spacer(),
+                    const SizedBox(height: 20),
 
                     if (_offerings?.current != null && _offerings!.current!.availablePackages.isNotEmpty)
                       ..._offerings!.current!.availablePackages.map((package) {
@@ -173,20 +174,23 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      package.storeProduct.title,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      package.storeProduct.priceString,
-                                      style: TextStyle(color: Colors.amber.shade200, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        package.storeProduct.title,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        package.storeProduct.priceString,
+                                        style: TextStyle(color: Colors.amber.shade200, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                const SizedBox(width: 8),
                                 if (isSelected)
                                   const Icon(Icons.check_circle, color: Colors.amber),
                               ],
@@ -221,8 +225,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     
                     const SizedBox(height: 16),
                     
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8.0,
+                      runSpacing: 4.0,
                       children: [
                         TextButton(
                           onPressed: _restorePurchases,

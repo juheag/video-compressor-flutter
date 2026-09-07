@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -10,7 +11,8 @@ import 'package:video_player/video_player.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'paywall_screen.dart';
-import 'translations.dart'; // Importamos el diccionario
+import 'translations.dart';
+import 'conversion_sheet.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +20,8 @@ void main() async {
   await MobileAds.instance.initialize();
 
   if (Platform.isIOS) {
-    await Purchases.configure(PurchasesConfiguration('test_asFwtRNkcwktZBtwUuzubLhArSk'));
+    await Purchases.setLogLevel(LogLevel.debug);
+    await Purchases.configure(PurchasesConfiguration('appl_tgUxHKXMxVehGfWFaLxWixpEhlQ'));
   }
 
   runApp(const MaterialApp(
@@ -161,6 +164,77 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
     }
   }
 
+  
+  Future<void> _handleConversionFlow() async {
+    if (_outputPath == null) return;
+
+    if (_isPro) {
+      ConversionSheet.show(context, _outputPath!);
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final usedConversions = prefs.getInt('free_conversions_count') ?? 0;
+
+    if (usedConversions >= 3) {
+      _openPaywall();
+      return;
+    }
+
+    final remaining = 3 - usedConversions;
+    final remainingText = remaining == 1
+        ? 'Te queda 1 conversión gratuita.'
+        : 'Te quedan $remaining conversiones gratuitas.';
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.stars_rounded, color: Colors.amber, size: 26),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Conversión Gratuita',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '''$remainingText
+
+Podrás convertir este video tras ver un breve anuncio publicitario.''',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+
+    if (proceed != true) return;
+
+    await prefs.setInt('free_conversions_count', usedConversions + 1);
+    _showInterstitialIfAvailable();
+
+    if (mounted) {
+      ConversionSheet.show(context, _outputPath!);
+    }
+  }
+
   Future<void> _pickVideo() async {
     setState(() {
       _isLoadingFile = true;
@@ -171,8 +245,8 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
         type: FileType.video,
       );
 
-      if (result != null && result.paths.isNotEmpty && result.paths.first != null) {
-        final file = File(result.paths.first!);
+      if (result != null && result.isNotEmpty && result.first.path != null) {
+        final file = File(result.first.path!);
         final bytes = await file.length();
 
         await _videoController?.dispose();
@@ -391,10 +465,14 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  AppText.get('compression_level'),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Expanded(
+                  child: Text(
+                    AppText.get('compression_level'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 if (_isPro)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -615,6 +693,18 @@ class _VideoCompressorScreenState extends State<VideoCompressorScreen> {
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _handleConversionFlow,
+                      icon: const Icon(Icons.transform_outlined),
+                      label: const Text('Convertir a otro formato'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ],
