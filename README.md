@@ -39,8 +39,12 @@ Para garantizar la transparencia sobre el manejo de permisos y servicios de terc
 * [Términos y Condiciones de Uso (EULA)](https://juheag.github.io/video-compressor-flutter/terminos.html)
 * [Canal de Asistencia Técnica](https://juheag.github.io/video-compressor-flutter/)
 
-<h2>Soporte y Contacto</h2>
-<p>Si tienes problemas técnicos, dudas sobre tu suscripción Pro o necesitas asistencia con Videocomprime, por favor contáctanos directamente a nuestro correo de soporte: <b>juheag@icloud.com</b></p>
+<section id="soporte" style="margin-top: 20px; font-family: sans-serif;">
+  <h2>Soporte Técnico y Contacto</h2>
+  <p>Si experimentas problemas técnicos con la compresión de video, requieres asistencia con la versión Pro o tienes dudas sobre la aplicación, contáctanos directamente a nuestro canal oficial:</p>
+  <p><b>Correo electrónico de soporte:</b> <a href="mailto:juheag@icloud.com">juheag@icloud.com</a></p>
+  <p>Tiempo estimado de respuesta: menos de 24 horas.</p>
+</section>
 ---
 
 ### ⚖️ Licencia y Propiedad
